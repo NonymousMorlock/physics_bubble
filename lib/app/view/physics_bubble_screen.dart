@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -35,7 +34,6 @@ const _unlockedSpringDamping = 12.8;
 const _deformationSpringStiffness = 1500.0;
 const _deformationSpringDamping = 34.8;
 const _shaderAsset = 'shaders/physics_bubble.frag';
-const _platformChannel = MethodChannel('physics_bubble/platform');
 
 class PhysicsBubbleScreen extends StatefulWidget {
   const PhysicsBubbleScreen({super.key});
@@ -54,7 +52,6 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
   Duration? _lastTick;
   Duration? _themeRevealStartedAt;
   Duration? _popStartedAt;
-  int? _androidSdkInt;
 
   bool _hasLayout = false;
   bool _isDarkTheme = false;
@@ -100,7 +97,6 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
     super.initState();
     _ticker = createTicker(_handleTick);
     unawaited(_ticker.start());
-    unawaited(_loadAndroidSdkInt());
     unawaited(_loadShader());
   }
 
@@ -133,28 +129,6 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
       _shader?.dispose();
       _shader = null;
       _shaderBindings = null;
-    }
-  }
-
-  Future<void> _loadAndroidSdkInt() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      return;
-    }
-
-    try {
-      final sdkInt = await _platformChannel.invokeMethod<int>('sdkInt');
-      if (!mounted || sdkInt == null) {
-        return;
-      }
-
-      setState(() {
-        _androidSdkInt = sdkInt;
-      });
-    } on MissingPluginException {
-      // Widget tests and non-Android hosts do not provide this channel.
-    } on PlatformException {
-      // Ignore platform lookup failures and avoid substituting
-      // a broader fallback.
     }
   }
 
@@ -409,9 +383,6 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
       _previousBubbleY = _bubbleY;
     }
   }
-
-  bool get _showLegacyFallbackBubble =>
-      _androidSdkInt != null && _androidSdkInt! < 33;
 
   void _onDragStart() {
     if (_layout == null || _popStartedAt != null) {
@@ -671,7 +642,7 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
                     ),
                   ),
                 ),
-                if (_shader == null && _showLegacyFallbackBubble)
+                if (_shader == null)
                   CustomPaint(
                     painter: _BubbleFallbackPainter(
                       center: Offset(_bubbleX, _bubbleY),
