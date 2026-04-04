@@ -34,3 +34,5 @@ dev_dependencies:
 flutter:
   generate: true
   uses-material-design: true
+  shaders:
+    - shaders/physics_bubble.frag
