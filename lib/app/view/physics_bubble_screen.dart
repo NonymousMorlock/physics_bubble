@@ -22,6 +22,7 @@ const _deformationFactor = 0.015;
 const _deformationClamp = 0.6;
 const _velocitySmoothing = 0.15;
 const _themeRevealDuration = Duration(milliseconds: 1100);
+const _textAnimDuration = Duration(milliseconds: 700);
 const _popDuration = Duration(milliseconds: 150);
 const _popDelay = Duration(milliseconds: 2000);
 const _themeMorphStiffness = 300.0;
@@ -34,6 +35,16 @@ const _unlockedSpringDamping = 12.8;
 const _deformationSpringStiffness = 1500.0;
 const _deformationSpringDamping = 34.8;
 const _shaderAsset = 'shaders/physics_bubble.frag';
+const double _toggleTop = 48;
+const double _toggleRight = 24;
+const double _toggleSize = 48;
+const double _togglePadding = 6;
+const double _themeRevealRightInset = 100;
+const double _themeRevealTop = 150;
+const double _mainTextLineHeight = 40 / 32;
+const double _subtitleLineHeight = 26 / 24;
+const Cubic _fastOutLinearIn = Cubic(0.4, 0, 1, 1);
+const _themeToggleKey = ValueKey<String>('theme_toggle');
 
 class PhysicsBubbleScreen extends StatefulWidget {
   const PhysicsBubbleScreen({super.key});
@@ -51,6 +62,7 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
 
   Duration? _lastTick;
   Duration? _themeRevealStartedAt;
+  Duration? _textAnimStartedAt;
   Duration? _popStartedAt;
 
   bool _hasLayout = false;
@@ -87,6 +99,7 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
   double _toggleScale = 1;
   double _toggleScaleVelocity = 0;
   double _themeRevealProgress = 1;
+  double _textAnimProgress = 1;
   double _popProgress = 0;
   double _snapDamping = _snapSpringDamping;
 
@@ -199,18 +212,33 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
 
     if (_themeRevealStartedAt == null) {
       _themeRevealProgress = 1;
+    } else {
+      final normalized =
+          ((elapsed - _themeRevealStartedAt!).inMilliseconds /
+                  _themeRevealDuration.inMilliseconds)
+              .clamp(0, 1)
+              .toDouble();
+      _themeRevealProgress = _themeRevealCurve.transform(normalized);
+      if (normalized >= 1) {
+        _themeRevealStartedAt = null;
+        _themeRevealProgress = 1;
+      }
+    }
+
+    if (_textAnimStartedAt == null) {
+      _textAnimProgress = 1;
       return;
     }
 
-    final normalized =
-        ((elapsed - _themeRevealStartedAt!).inMilliseconds /
-                _themeRevealDuration.inMilliseconds)
+    final textNormalized =
+        ((elapsed - _textAnimStartedAt!).inMilliseconds /
+                _textAnimDuration.inMilliseconds)
             .clamp(0, 1)
             .toDouble();
-    _themeRevealProgress = _themeRevealCurve.transform(normalized);
-    if (normalized >= 1) {
-      _themeRevealStartedAt = null;
-      _themeRevealProgress = 1;
+    _textAnimProgress = _fastOutLinearIn.transform(textNormalized);
+    if (textNormalized >= 1) {
+      _textAnimStartedAt = null;
+      _textAnimProgress = 1;
     }
   }
 
@@ -224,7 +252,7 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
     if (elapsedSincePop <= _popDuration) {
       final normalized =
           elapsedSincePop.inMicroseconds / _popDuration.inMicroseconds;
-      _popProgress = Curves.easeIn.transform(
+      _popProgress = _fastOutLinearIn.transform(
         normalized.clamp(0.0, 1.0),
       );
       return;
@@ -347,9 +375,7 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
 
   void _ensureLayout(_BubbleLayout layout) {
     final previousLayout = _layout;
-    if (previousLayout != null &&
-        previousLayout.size == layout.size &&
-        previousLayout.safeTopInset == layout.safeTopInset) {
+    if (previousLayout != null && previousLayout.size == layout.size) {
       return;
     }
 
@@ -516,7 +542,9 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
     _previousIsDarkTheme = _isDarkTheme;
     _isDarkTheme = !_isDarkTheme;
     _themeRevealStartedAt = _lastTick ?? Duration.zero;
+    _textAnimStartedAt = _lastTick ?? Duration.zero;
     _themeRevealProgress = 0;
+    _textAnimProgress = 0;
     _toggleScale = 0.85;
     _toggleScaleVelocity = 0;
     setState(() {});
@@ -535,139 +563,149 @@ class _PhysicsBubbleScreenState extends State<PhysicsBubbleScreen>
       value: overlayStyle,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final mediaPadding = MediaQuery.paddingOf(context);
-            final layout = _BubbleLayout.fromSize(
-              Size(constraints.maxWidth, constraints.maxHeight),
-              mediaPadding.top,
-            );
-            _ensureLayout(layout);
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final layout = _BubbleLayout.fromSize(
+                Size(constraints.maxWidth, constraints.maxHeight),
+              );
+              _ensureLayout(layout);
 
-            final progress = layout.progressFor(_bubbleY);
-            final orbRadius = layout.orbRadiusFor(progress);
-            final textOffsetY = layout.textYOffsetFor(progress);
-            final toggleRect = Rect.fromLTWH(
-              constraints.maxWidth - 24 - 48,
-              mediaPadding.top + 16,
-              48,
-              48,
-            );
+              final progress = layout.progressFor(_bubbleY);
+              final orbRadius = layout.orbRadiusFor(progress);
+              final textOffsetY = layout.textYOffsetFor(progress);
+              final toggleRect = Rect.fromLTWH(
+                constraints.maxWidth - _toggleRight - _toggleSize,
+                _toggleTop,
+                _toggleSize,
+                _toggleSize,
+              );
 
-            final mainTextColor = Color.lerp(
-              _BubbleColors.lightMainText,
-              _BubbleColors.darkMainText,
-              _themeMorphProgress,
-            )!;
-            final titleColor = Color.lerp(
-              _BubbleColors.lightTitle,
-              _BubbleColors.darkTitle,
-              _themeMorphProgress,
-            )!;
-            final subtitleColor = Color.lerp(
-              _BubbleColors.lightSubtitle,
-              _BubbleColors.darkSubtitle,
-              _themeMorphProgress,
-            )!;
+              final mainTextColor = Color.lerp(
+                _previousIsDarkTheme
+                    ? _BubbleColors.darkMainText
+                    : _BubbleColors.lightMainText,
+                _isDarkTheme
+                    ? _BubbleColors.darkMainText
+                    : _BubbleColors.lightMainText,
+                _textAnimProgress,
+              )!;
+              final titleColor = Color.lerp(
+                _previousIsDarkTheme
+                    ? _BubbleColors.darkTitle
+                    : _BubbleColors.lightTitle,
+                _isDarkTheme ? _BubbleColors.darkTitle : _BubbleColors.lightTitle,
+                _textAnimProgress,
+              )!;
+              final subtitleColor = Color.lerp(
+                _previousIsDarkTheme
+                    ? _BubbleColors.darkSubtitle
+                    : _BubbleColors.lightSubtitle,
+                _isDarkTheme
+                    ? _BubbleColors.darkSubtitle
+                    : _BubbleColors.lightSubtitle,
+                _textAnimProgress,
+              )!;
 
-            final bubbleScene = Stack(
-              fit: StackFit.expand,
-              children: [
-                CustomPaint(
-                  painter: _ThemeBackgroundPainter(
-                    isDarkTheme: _isDarkTheme,
-                    previousIsDarkTheme: _previousIsDarkTheme,
-                    revealProgress: _themeRevealProgress,
-                    revealEpicenter: layout.revealEpicenter,
+              final bubbleScene = Stack(
+                fit: StackFit.expand,
+                children: [
+                  CustomPaint(
+                    painter: _ThemeBackgroundPainter(
+                      isDarkTheme: _isDarkTheme,
+                      previousIsDarkTheme: _previousIsDarkTheme,
+                      revealProgress: _themeRevealProgress,
+                      revealEpicenter: layout.revealEpicenter,
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: mediaPadding.top + 16,
-                  right: 24,
-                  child: _ThemeToggleButton(
-                    progress: _themeMorphProgress,
-                    scale: _toggleScale,
-                    onTap: _toggleTheme,
-                  ),
-                ),
-                Align(
-                  child: Transform.translate(
-                    offset: const Offset(0, -80),
-                    child: Opacity(
-                      opacity: (1 - (progress * 4)).clamp(0, 1),
-                      child: Text(
-                        'Pixels are now\nphysical.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: mainTextColor,
-                          fontSize: 32,
-                          height: 1.25,
-                          fontWeight: FontWeight.w500,
+                  Align(
+                    child: Transform.translate(
+                      offset: const Offset(0, -80),
+                      child: Opacity(
+                        opacity: (1 - (progress * 4)).clamp(0, 1),
+                        child: Text(
+                          'Pixels are now\nphysical.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: mainTextColor,
+                            fontSize: 32,
+                            height: _mainTextLineHeight,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                Transform.translate(
-                  offset: Offset(0, textOffsetY),
-                  child: Align(
-                    child: Opacity(
-                      opacity: (progress * 3).clamp(0, 1),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'AGSL Pipelines',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: titleColor,
-                              fontSize: 44,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -1,
+                  Transform.translate(
+                    offset: Offset(0, textOffsetY),
+                    child: Align(
+                      child: Opacity(
+                        opacity: (progress * 3).clamp(0, 1),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'AGSL Pipelines',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: titleColor,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -1,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Real-time thin-film interference\n'
-                            'driven by kinematic springs.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: subtitleColor,
-                              fontSize: 24,
-                              height: 1.08,
+                            const SizedBox(height: 16),
+                            Text(
+                              'Real-time thin-film interference\n'
+                              'driven by kinematic springs.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: subtitleColor,
+                                fontSize: 24,
+                                height: _subtitleLineHeight,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (_shader == null)
-                  CustomPaint(
-                    painter: _BubbleFallbackPainter(
-                      center: Offset(_bubbleX, _bubbleY),
-                      radius: orbRadius,
-                      deformation: Offset(_deformationX, _deformationY),
-                      popProgress: _popProgress,
+                  if (_shader == null)
+                    CustomPaint(
+                      painter: _BubbleFallbackPainter(
+                        center: Offset(_bubbleX, _bubbleY),
+                        radius: orbRadius,
+                        deformation: Offset(_deformationX, _deformationY),
+                        popProgress: _popProgress,
+                      ),
+                    ),
+                  Positioned(
+                    top: _toggleTop,
+                    right: _toggleRight,
+                    child: _ThemeToggleButton(
+                      progress: _themeMorphProgress,
+                      scale: _toggleScale,
+                      onTap: _toggleTheme,
                     ),
                   ),
-              ],
-            );
+                ],
+              );
 
-            final filteredScene = _buildFilteredScene(
-              orbRadius: orbRadius,
-              scene: bubbleScene,
-            );
+              final filteredScene = _buildFilteredScene(
+                orbRadius: orbRadius,
+                scene: bubbleScene,
+              );
 
-            return Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (event) => _handlePointerDown(event, toggleRect),
-              onPointerMove: _handlePointerMove,
-              onPointerUp: _handlePointerUp,
-              onPointerCancel: _handlePointerCancel,
-              child: filteredScene,
-            );
-          },
+              return Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (event) => _handlePointerDown(event, toggleRect),
+                onPointerMove: _handlePointerMove,
+                onPointerUp: _handlePointerUp,
+                onPointerCancel: _handlePointerCancel,
+                child: filteredScene,
+              );
+            },
+          ),
         ),
       ),
     );
@@ -732,14 +770,21 @@ class _ThemeToggleButton extends StatelessWidget {
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
+          key: _themeToggleKey,
+          behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Transform.scale(
             scale: scale,
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: CustomPaint(
-                painter: _ThemeTogglePainter(progress: progress),
+            child: ClipOval(
+              child: SizedBox(
+                width: _toggleSize,
+                height: _toggleSize,
+                child: Padding(
+                  padding: const EdgeInsets.all(_togglePadding),
+                  child: CustomPaint(
+                    painter: _ThemeTogglePainter(progress: progress),
+                  ),
+                ),
               ),
             ),
           ),
@@ -873,6 +918,7 @@ class _ThemeBackgroundPainter extends CustomPainter {
   }
 
   ui.Shader _backgroundShaderFor(Size size, bool dark) {
+    final center = Offset(size.width / 2, size.height * 0.4);
     final colors = dark
         ? <Color>[
             _BubbleColors.darkCenter,
@@ -888,8 +934,8 @@ class _ThemeBackgroundPainter extends CustomPainter {
           ];
 
     return ui.Gradient.radial(
-      Offset(size.width / 2, size.height * 0.4),
-      size.longestSide * 0.72,
+      center,
+      _farthestCornerDistance(size, center),
       colors,
       const [0, 0.3, 0.7, 1],
     );
@@ -902,6 +948,20 @@ class _ThemeBackgroundPainter extends CustomPainter {
         oldDelegate.revealProgress != revealProgress ||
         oldDelegate.revealEpicenter != revealEpicenter;
   }
+
+  @override
+  bool? hitTest(Offset position) => false;
+}
+
+double _farthestCornerDistance(Size size, Offset center) {
+  final corners = <Offset>[
+    Offset.zero,
+    Offset(size.width, 0),
+    Offset(0, size.height),
+    Offset(size.width, size.height),
+  ];
+
+  return corners.map((corner) => (corner - center).distance).reduce(math.max);
 }
 
 class _BubbleFallbackPainter extends CustomPainter {
@@ -992,6 +1052,9 @@ class _BubbleFallbackPainter extends CustomPainter {
         oldDelegate.deformation != deformation ||
         oldDelegate.popProgress != popProgress;
   }
+
+  @override
+  bool? hitTest(Offset position) => false;
 }
 
 class _BubbleColors {
@@ -1015,15 +1078,13 @@ class _BubbleColors {
 class _BubbleLayout {
   const _BubbleLayout({
     required this.size,
-    required this.safeTopInset,
   });
 
-  factory _BubbleLayout.fromSize(Size size, double safeTopInset) {
-    return _BubbleLayout(size: size, safeTopInset: safeTopInset);
+  factory _BubbleLayout.fromSize(Size size) {
+    return _BubbleLayout(size: size);
   }
 
   final Size size;
-  final double safeTopInset;
 
   double get centerX => size.width / 2;
 
@@ -1039,7 +1100,8 @@ class _BubbleLayout {
 
   double get textTopY => size.height * _textYTopRatio;
 
-  Offset get revealEpicenter => Offset(size.width - 48, safeTopInset + 40);
+  Offset get revealEpicenter =>
+      Offset(size.width - _themeRevealRightInset, _themeRevealTop);
 
   double progressFor(double bubbleY) {
     final orbRange = bottomOrbCenterY - topOrbCenterY;
