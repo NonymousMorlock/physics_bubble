@@ -11,7 +11,7 @@ dependencies:
   bloc: ^9.2.1
   dartz: ^0.10.1
   device_preview: ^3.0.0
-  equatable: ^2.1.0
+  equatable: ^3.0.0
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
