@@ -69,10 +69,10 @@ packages:
     dependency: "direct dev"
     description:
       name: bloc_tools
-      sha256: fa7fdef35d4ec5e8f2111a2079cef2204008d20dc15953812f46afde379b33ba
+      sha256: bd42320558783de232e7f9de291cfac0062664ece362179baec8a667acf819b8
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.0-dev.24"
+    version: "0.1.0-dev.25"
   boolean_selector:
     dependency: transitive
     description:
@@ -500,10 +500,10 @@ packages:
     dependency: transitive
     description:
       name: pub_updater
-      sha256: "739a0161d73a6974c0675b864fb0cf5147305f7b077b7f03a58fa7a9ab3e7e7d"
+      sha256: "3aadeb8c68d15ef9d117b36474ddcc543b48ae1e64f7dd71407da26df66bf7c8"
       url: "https://pub.dev"
     source: hosted
-    version: "0.5.0"
+    version: "0.6.0"
   pubspec_lock_parse:
     dependency: transitive
     description:
